@@ -9,11 +9,13 @@ import {
 import { AnimatePresence } from "motion/react";
 import { useEffect, useState } from "react";
 import { useAuth } from "./hooks/useAuth";
+import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPage from "./pages/AdminPage";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import SplashScreen from "./pages/SplashScreen";
+import TechnicianLoginPageRoute from "./pages/TechnicianLoginPageRoute";
 import TechnicianPage from "./pages/TechnicianPage";
 
 const rootRoute = createRootRoute({
@@ -43,10 +45,24 @@ const technicianRoute = createRoute({
   component: TechnicianPage,
 });
 
+const adminLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/admin-login",
+  component: AdminLoginPage,
+});
+
+const technicianLoginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/technician-login",
+  component: TechnicianLoginPageRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   adminRoute,
   technicianRoute,
+  adminLoginRoute,
+  technicianLoginRoute,
 ]);
 
 const router = createRouter({ routeTree });
@@ -67,9 +83,11 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  function handleAuthSuccess() {
-    // isLoggedIn is updated via login() call inside pages
-  }
+  const pathname = window.location.pathname;
+  // These routes handle their own auth — bypass global auth gate
+  const isTechnicianRoute = pathname.startsWith("/technician");
+  const isAdminLoginRoute = pathname === "/admin-login";
+  const isTechnicianLoginRoute = pathname === "/technician-login";
 
   if (showSplash) {
     return (
@@ -79,16 +97,44 @@ export default function App() {
     );
   }
 
+  // Render standalone pages directly — they handle their own auth
+  if (isTechnicianRoute) {
+    return (
+      <>
+        <Toaster theme="light" position="top-center" richColors />
+        <TechnicianPage />
+      </>
+    );
+  }
+
+  if (isAdminLoginRoute) {
+    return (
+      <>
+        <Toaster theme="light" position="top-center" richColors />
+        <AdminLoginPage />
+      </>
+    );
+  }
+
+  if (isTechnicianLoginRoute) {
+    return (
+      <>
+        <Toaster theme="light" position="top-center" richColors />
+        <TechnicianLoginPageRoute />
+      </>
+    );
+  }
+
   if (!isLoggedIn) {
     return showSignup ? (
       <SignupPage
-        onAuthSuccess={handleAuthSuccess}
+        onAuthSuccess={() => {}}
         onGoToLogin={() => setShowSignup(false)}
         loginFn={login}
       />
     ) : (
       <LoginPage
-        onAuthSuccess={handleAuthSuccess}
+        onAuthSuccess={() => {}}
         onGoToSignup={() => setShowSignup(true)}
         loginFn={login}
       />

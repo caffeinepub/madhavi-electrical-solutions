@@ -1,4 +1,3 @@
-import type { Principal } from "@icp-sdk/core/principal";
 export interface Some<T> {
     __kind__: "Some";
     value: T;
@@ -25,27 +24,16 @@ export interface Booking {
     status: string;
     timestamp: Time;
 }
-export interface UserProfile {
-    name: string;
-}
-export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
-}
 export type AuthResult = { ok: null } | { err: string };
+export type AuthRoleResult = { ok: string } | { err: string };
 export type UpdateStatusResult = { ok: null } | { err: string };
 export interface backendInterface {
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    getBookings(): Promise<Array<Booking>>;
-    getTechnicianBookings(): Promise<Array<Booking>>;
-    updateBookingStatus(bookingId: BookingId, newStatus: string): Promise<UpdateStatusResult>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    isCallerAdmin(): Promise<boolean>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    _initializeAccessControlWithSecret(secret: string): Promise<void>;
     submitBooking(submission: BookingSubmission): Promise<void>;
     registerUser(email: string, passwordHash: string): Promise<AuthResult>;
-    authenticateUser(email: string, passwordHash: string): Promise<AuthResult>;
+    authenticateUser(email: string, passwordHash: string): Promise<AuthRoleResult>;
+    registerAdmin(email: string, passwordHash: string): Promise<AuthResult>;
+    getTechnicianBookings(): Promise<Array<Booking>>;
+    updateBookingStatus(bookingId: BookingId, newStatus: string): Promise<UpdateStatusResult>;
+    getBookingsAuthenticated(email: string, passwordHash: string): Promise<{ ok: Booking[] } | { err: string }>;
 }

@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   Loader2,
   LogOut,
+  Mail,
   Menu,
+  Phone,
   Sparkles,
   Wrench,
   X,
@@ -27,6 +29,38 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../hooks/useAuth";
 import { useSubmitBooking } from "../hooks/useQueries";
+
+const SERVICES = [
+  {
+    icon: Zap,
+    name: "Electrical Repair",
+    desc: "Fast diagnosis and repair of all electrical faults.",
+  },
+  {
+    icon: Wrench,
+    name: "Wiring Installation",
+    desc: "Safe, code-compliant wiring for homes and offices.",
+  },
+  {
+    icon: Wrench,
+    name: "Panel Wiring",
+    desc: "Distribution board and panel wiring by experts.",
+  },
+  {
+    icon: Wrench,
+    name: "Maintenance Service",
+    desc: "Scheduled upkeep to prevent failures and extend life.",
+  },
+  {
+    icon: Zap,
+    name: "Industrial Work",
+    desc: "Heavy-duty electrical solutions for industrial setups.",
+  },
+];
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+}
 
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -95,21 +129,31 @@ export default function HomePage() {
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden items-center gap-2 md:flex">
-            <Link
-              to="/technician"
+          <nav className="hidden items-center gap-1 md:flex">
+            <button
+              type="button"
+              onClick={() => scrollTo("book-service")}
               className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               data-ocid="nav.link"
             >
-              Technician
-            </Link>
-            <Link
-              to="/admin"
+              Book Service
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo("services")}
               className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               data-ocid="nav.link"
             >
-              Admin
-            </Link>
+              Services
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo("contact")}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              data-ocid="nav.link"
+            >
+              Contact
+            </button>
             <button
               type="button"
               onClick={logout}
@@ -140,22 +184,39 @@ export default function HomePage() {
         {menuOpen && (
           <div className="border-t border-border bg-card px-5 py-4 md:hidden">
             <div className="flex flex-col gap-1">
-              <Link
-                to="/technician"
-                onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  scrollTo("book-service");
+                }}
+                className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 data-ocid="nav.link"
               >
-                Technician Panel
-              </Link>
-              <Link
-                to="/admin"
-                onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                Book Service
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  scrollTo("services");
+                }}
+                className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 data-ocid="nav.link"
               >
-                Admin Panel
-              </Link>
+                Services
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  scrollTo("contact");
+                }}
+                className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                data-ocid="nav.link"
+              >
+                Contact
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -176,7 +237,7 @@ export default function HomePage() {
       {/* Main content */}
       <main className="mx-auto flex w-full max-w-[480px] flex-1 flex-col px-5 py-8">
         {/* Page title */}
-        <div className="mb-7">
+        <div className="mb-7" id="book-service">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
               <Wrench className="h-5 w-5 text-primary" />
@@ -259,7 +320,7 @@ export default function HomePage() {
                   value={userEmail}
                   readOnly
                   className="h-12 border-border bg-muted px-4 text-muted-foreground"
-                  data-ocid="booking.email_input"
+                  data-ocid="booking.input"
                 />
               </div>
             </div>
@@ -336,6 +397,7 @@ export default function HomePage() {
                   <p
                     className="flex items-center gap-1 text-xs font-medium text-destructive"
                     role="alert"
+                    data-ocid="booking.error_state"
                   >
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
                     {descriptionError}
@@ -366,7 +428,7 @@ export default function HomePage() {
                   onChange={(e) => setDateTime(e.target.value)}
                   required
                   className="h-12 border-border bg-background px-4 text-foreground focus-visible:ring-primary"
-                  data-ocid="booking.datetime_input"
+                  data-ocid="booking.input"
                 />
               </div>
             </div>
@@ -395,6 +457,93 @@ export default function HomePage() {
             </div>
           </motion.form>
         )}
+
+        {/* Our Services Section */}
+        <section id="services" className="mt-12">
+          <div className="mb-5 flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              Our Services
+            </h2>
+          </div>
+          <div className="flex flex-col gap-3">
+            {SERVICES.map((svc, i) => (
+              <motion.div
+                key={svc.name}
+                className="flex items-start gap-4 rounded-xl border border-border bg-card px-5 py-4 shadow-xs"
+                initial={{ opacity: 0, y: 12 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.3, delay: i * 0.06 }}
+                data-ocid={`services.item.${i + 1}`}
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <svc.icon className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-semibold text-foreground">
+                    {svc.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{svc.desc}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* Contact Section */}
+        <section id="contact" className="mt-12 mb-4">
+          <div className="mb-5 flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+              <Phone className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              Contact Us
+            </h2>
+          </div>
+          <motion.div
+            className="flex flex-col gap-4 rounded-xl border border-border bg-card px-5 py-5 shadow-xs"
+            initial={{ opacity: 0, y: 12 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.3 }}
+            data-ocid="contact.card"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-green-100">
+                <Phone className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Phone / WhatsApp
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  +91-XXXXXXXXXX
+                </p>
+              </div>
+            </div>
+            <Separator />
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100">
+                <Mail className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  Email
+                </p>
+                <p className="text-sm font-semibold text-foreground">
+                  support@mesinfratech.com
+                </p>
+              </div>
+            </div>
+            <Separator />
+            <p className="text-xs text-muted-foreground">
+              Available Mon–Sat, 9 AM – 7 PM. For emergencies, call anytime.
+            </p>
+          </motion.div>
+        </section>
       </main>
 
       {/* Footer */}

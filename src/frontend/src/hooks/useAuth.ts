@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 const AUTH_KEY = "mes_auth_email";
+const PASSWORD_KEY = "mes_auth_password";
 
 export function useAuth() {
   const [isLoggedIn, setIsLoggedIn] = useState(
@@ -14,6 +15,7 @@ export function useAuth() {
 
   function logout() {
     localStorage.removeItem(AUTH_KEY);
+    sessionStorage.removeItem(PASSWORD_KEY);
     setIsLoggedIn(false);
   }
 
@@ -21,5 +23,9 @@ export function useAuth() {
     return localStorage.getItem(AUTH_KEY);
   }
 
-  return { isLoggedIn, login, logout, getEmail };
+  function getPasswordHash(): string | null {
+    return sessionStorage.getItem(PASSWORD_KEY);
+  }
+
+  return { isLoggedIn, login, logout, getEmail, getPasswordHash };
 }

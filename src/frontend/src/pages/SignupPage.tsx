@@ -29,6 +29,16 @@ export default function SignupPage({
     e.preventDefault();
     if (!actor || isFetching) return;
     setError("");
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError("Email address is required.");
+      return;
+    }
+    if (!password.trim()) {
+      setError("Password is required.");
+      return;
+    }
     if (password !== confirm) {
       setError("Passwords do not match.");
       return;
@@ -37,18 +47,23 @@ export default function SignupPage({
       setError("Password must be at least 6 characters.");
       return;
     }
+
     setLoading(true);
     try {
       const hash = await hashPassword(password);
-      const result = await (actor as any).registerUser(email, hash);
+      const result = await (actor as any).registerUser(trimmedEmail, hash);
       if ("ok" in result) {
-        loginFn(email);
+        sessionStorage.setItem("mes_auth_password", hash);
+        loginFn(trimmedEmail);
         onAuthSuccess();
-      } else {
+      } else if ("err" in result) {
         setError(result.err || "Registration failed. Please try again.");
+      } else {
+        setError("Unexpected response from server.");
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

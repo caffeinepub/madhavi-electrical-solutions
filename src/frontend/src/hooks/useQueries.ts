@@ -2,18 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Booking, BookingSubmission } from "../backend";
 import { useActor } from "./useActor";
 
-export function useGetBookings() {
-  const { actor, isFetching } = useActor();
-  return useQuery<Booking[]>({
-    queryKey: ["bookings"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getBookings();
-    },
-    enabled: !!actor && !isFetching,
-  });
-}
-
 export function useGetTechnicianBookings() {
   const { actor, isFetching } = useActor();
   return useQuery<Booking[]>({
@@ -45,20 +33,8 @@ export function useUpdateBookingStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["technicianBookings"] });
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["adminBookings"] });
     },
-  });
-}
-
-export function useIsAdmin() {
-  const { actor, isFetching } = useActor();
-  return useQuery<boolean>({
-    queryKey: ["isAdmin"],
-    queryFn: async () => {
-      if (!actor) return false;
-      return actor.isCallerAdmin();
-    },
-    enabled: !!actor && !isFetching,
   });
 }
 
@@ -71,7 +47,26 @@ export function useSubmitBooking() {
       await actor.submitBooking(submission);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["technicianBookings"] });
     },
+  });
+}
+
+export function useGetAdminBookings(
+  email: string | null,
+  passwordHash: string | null,
+) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Booking[]>({
+    queryKey: ["adminBookings", email],
+    queryFn: async () => {
+      if (!actor || !email || !passwordHash) return [];
+      const a = actor as any;
+      const result = await a.getBookingsAuthenticated(email, passwordHash);
+      if ("ok" in result) return result.ok;
+      throw new Error(result.err);
+    },
+    enabled: !!actor && !isFetching && !!email && !!passwordHash,
+    refetchInterval: 10000,
   });
 }

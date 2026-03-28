@@ -1,20 +1,19 @@
 import Text "mo:core/Text";
 import Map "mo:core/Map";
-import Runtime "mo:core/Runtime";
 import Int "mo:core/Int";
 import Time "mo:core/Time";
-import Principal "mo:core/Principal";
 import Order "mo:core/Order";
+import Principal "mo:core/Principal";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
 actor {
+  // Keep accessControlState to maintain upgrade compatibility
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
   type BookingId = Text;
 
-  // V1 type kept for stable variable migration compatibility
   type BookingV1 = {
     bookingId : BookingId;
     serviceType : Text;
@@ -44,13 +43,9 @@ actor {
     bookingIdCounter.toText();
   };
 
-  // Original stable variable kept with old type for migration compatibility
   let bookings = Map.empty<BookingId, BookingV1>();
-
-  // New stable variable with updated Booking type
   let bookingsV2 = Map.empty<BookingId, Booking>();
 
-  // Migrate any V1 bookings into V2 on upgrade
   system func postupgrade() {
     for (b in bookings.values()) {
       switch (bookingsV2.get(b.bookingId)) {
@@ -64,6 +59,19 @@ actor {
             dateTime = "";
             status = "pending";
             timestamp = b.timestamp;
+          });
+        };
+      };
+    };
+    // Migrate emailAuthStore (old, no role) -> emailAuthStoreV2 (with role)
+    for (record in emailAuthStore.values()) {
+      switch (emailAuthStoreV2.get(record.email)) {
+        case (?_) {};
+        case (null) {
+          emailAuthStoreV2.add(record.email, {
+            email = record.email;
+            passwordHash = record.passwordHash;
+            role = "customer";
           });
         };
       };
@@ -82,63 +90,90 @@ actor {
     name : Text;
   };
 
+  // Keep userProfiles for upgrade compatibility
   let userProfiles = Map.empty<Principal, UserProfile>();
 
-  // Email/password auth
+  // OLD email auth store (no role) — kept for upgrade compatibility + migration source
   type EmailAuthRecord = {
     email : Text;
     passwordHash : Text;
   };
-
   let emailAuthStore = Map.empty<Text, EmailAuthRecord>();
+
+  // NEW email auth store with role
+  type EmailAuthRecordV2 = {
+    email : Text;
+    passwordHash : Text;
+    role : Text; // "customer", "technician", "admin"
+  };
+  let emailAuthStoreV2 = Map.empty<Text, EmailAuthRecordV2>();
 
   public shared func registerUser(email : Text, passwordHash : Text) : async { #ok; #err : Text } {
     let normalized = email.toLower();
-    switch (emailAuthStore.get(normalized)) {
-      case (?_) { #err("Email already registered") };
+    // Check both stores
+    let existsOld = switch (emailAuthStore.get(normalized)) { case (?_) true; case (null) false };
+    let existsNew = switch (emailAuthStoreV2.get(normalized)) { case (?_) true; case (null) false };
+    if (existsOld or existsNew) {
+      #err("Email already registered");
+    } else {
+      emailAuthStoreV2.add(normalized, { email = normalized; passwordHash; role = "customer" });
+      #ok;
+    };
+  };
+
+  public query func authenticateUser(email : Text, passwordHash : Text) : async { #ok : Text; #err : Text } {
+    let normalized = email.toLower();
+    // Check new store first
+    switch (emailAuthStoreV2.get(normalized)) {
+      case (?record) {
+        if (record.passwordHash == passwordHash) { #ok(record.role) }
+        else { #err("Incorrect password. Please try again.") };
+      };
       case (null) {
-        emailAuthStore.add(normalized, { email = normalized; passwordHash });
+        // Fallback to old store
+        switch (emailAuthStore.get(normalized)) {
+          case (null) { #err("Email not found. Please sign up first.") };
+          case (?record) {
+            if (record.passwordHash == passwordHash) { #ok("customer") }
+            else { #err("Incorrect password. Please try again.") };
+          };
+        };
+      };
+    };
+  };
+
+  // Register first admin (only works if no admin exists yet)
+  public shared func registerAdmin(email : Text, passwordHash : Text) : async { #ok; #err : Text } {
+    let normalized = email.toLower();
+    for (record in emailAuthStoreV2.values()) {
+      if (record.role == "admin") {
+        return #err("Admin already exists");
+      };
+    };
+    switch (emailAuthStoreV2.get(normalized)) {
+      case (?existing) {
+        if (existing.passwordHash != passwordHash) { return #err("Invalid credentials") };
+        emailAuthStoreV2.add(normalized, { email = existing.email; passwordHash = existing.passwordHash; role = "admin" });
         #ok;
       };
-    };
-  };
-
-  public query func authenticateUser(email : Text, passwordHash : Text) : async { #ok; #err : Text } {
-    let normalized = email.toLower();
-    switch (emailAuthStore.get(normalized)) {
-      case (null) { #err("Email not found") };
-      case (?record) {
-        if (record.passwordHash == passwordHash) { #ok }
-        else { #err("Incorrect password") };
+      case (null) {
+        // Also check old store
+        switch (emailAuthStore.get(normalized)) {
+          case (?old) {
+            if (old.passwordHash != passwordHash) { return #err("Invalid credentials") };
+            emailAuthStoreV2.add(normalized, { email = old.email; passwordHash = old.passwordHash; role = "admin" });
+            #ok;
+          };
+          case (null) {
+            emailAuthStoreV2.add(normalized, { email = normalized; passwordHash; role = "admin" });
+            #ok;
+          };
+        };
       };
     };
   };
 
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
-    };
-    userProfiles.get(caller);
-  };
-
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
-    };
-    userProfiles.get(user);
-  };
-
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
-    };
-    userProfiles.add(caller, profile);
-  };
-
-  public shared ({ caller }) func submitBooking(submission : BookingSubmission) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can submit bookings");
-    };
+  public shared func submitBooking(submission : BookingSubmission) : async () {
     let bookingId = createBookingId();
     bookingsV2.add(bookingId, {
       bookingId;
@@ -151,19 +186,22 @@ actor {
     });
   };
 
-  public query ({ caller }) func getBookings() : async [Booking] {
-    if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      Runtime.trap("Unauthorized: Only admins can view all bookings");
+  public query func getBookingsAuthenticated(email : Text, passwordHash : Text) : async { #ok : [Booking]; #err : Text } {
+    let normalized = email.toLower();
+    switch (emailAuthStoreV2.get(normalized)) {
+      case (null) { #err("Not authenticated") };
+      case (?record) {
+        if (record.passwordHash != passwordHash) { return #err("Invalid credentials") };
+        if (record.role != "admin") { return #err("Access denied: not an admin") };
+        #ok(bookingsV2.values().toArray().sort());
+      };
     };
-    bookingsV2.values().toArray().sort();
   };
 
-  // Technician: fetch all bookings (open to any caller)
   public query func getTechnicianBookings() : async [Booking] {
     bookingsV2.values().toArray().sort();
   };
 
-  // Technician: update booking status to "accepted" or "completed"
   public shared func updateBookingStatus(bookingId : BookingId, newStatus : Text) : async { #ok; #err : Text } {
     switch (bookingsV2.get(bookingId)) {
       case (null) { #err("Booking not found") };

@@ -7,7 +7,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Actor, HttpAgent, type HttpAgentOptions, type ActorConfig, type Agent, type ActorSubclass } from "@icp-sdk/core/agent";
-import type { Principal } from "@icp-sdk/core/principal";
 import { idlFactory, type _SERVICE } from "./declarations/backend.did";
 export interface Some<T> {
     __kind__: "Some";
@@ -17,40 +16,6 @@ export interface None {
     __kind__: "None";
 }
 export type Option<T> = Some<T> | None;
-function some<T>(value: T): Some<T> {
-    return {
-        __kind__: "Some",
-        value: value
-    };
-}
-function none(): None {
-    return {
-        __kind__: "None"
-    };
-}
-function isNone<T>(option: Option<T>): option is None {
-    return option.__kind__ === "None";
-}
-function isSome<T>(option: Option<T>): option is Some<T> {
-    return option.__kind__ === "Some";
-}
-function unwrap<T>(option: Option<T>): T {
-    if (isNone(option)) {
-        throw new Error("unwrap: none");
-    }
-    return option.value;
-}
-function candid_some<T>(value: T): [T] {
-    return [
-        value
-    ];
-}
-function candid_none<T>(): [] {
-    return [];
-}
-function record_opt_to_undefined<T>(arg: T | null): T | undefined {
-    return arg == null ? undefined : arg;
-}
 export class ExternalBlob {
     _blob?: Uint8Array<ArrayBuffer> | null;
     directURL: string;
@@ -107,187 +72,114 @@ export interface Booking {
     status: string;
     timestamp: Time;
 }
-export interface UserProfile {
-    name: string;
-}
-export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
-}
 export interface backendInterface {
-    _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    getBookings(): Promise<Array<Booking>>;
-    getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
-    getUserProfile(user: Principal): Promise<UserProfile | null>;
-    isCallerAdmin(): Promise<boolean>;
-    saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    _initializeAccessControlWithSecret(secret: string): Promise<void>;
     submitBooking(submission: BookingSubmission): Promise<void>;
+    registerUser(email: string, passwordHash: string): Promise<{ ok: null } | { err: string }>;
+    authenticateUser(email: string, passwordHash: string): Promise<{ ok: string } | { err: string }>;
+    registerAdmin(email: string, passwordHash: string): Promise<{ ok: null } | { err: string }>;
+    getTechnicianBookings(): Promise<Array<Booking>>;
+    updateBookingStatus(bookingId: string, status: string): Promise<{ ok: null } | { err: string }>;
+    getBookingsAuthenticated(email: string, passwordHash: string): Promise<{ ok: Array<Booking> } | { err: string }>;
 }
-import type { UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor._initializeAccessControlWithSecret(arg0);
-                return result;
+                return await this.actor._initializeAccessControlWithSecret(arg0);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor._initializeAccessControlWithSecret(arg0);
-            return result;
-        }
-    }
-    async assignCallerUserRole(arg0: Principal, arg1: UserRole): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n1(this._uploadFile, this._downloadFile, arg1));
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.assignCallerUserRole(arg0, to_candid_UserRole_n1(this._uploadFile, this._downloadFile, arg1));
-            return result;
-        }
-    }
-    async getBookings(): Promise<Array<Booking>> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getBookings();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getBookings();
-            return result;
-        }
-    }
-    async getCallerUserProfile(): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserProfile();
-                return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserProfile();
-            return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getCallerUserRole(): Promise<UserRole> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getCallerUserRole();
-                return from_candid_UserRole_n4(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getCallerUserRole();
-            return from_candid_UserRole_n4(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async getUserProfile(arg0: Principal): Promise<UserProfile | null> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.getUserProfile(arg0);
-                return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.getUserProfile(arg0);
-            return from_candid_opt_n3(this._uploadFile, this._downloadFile, result);
-        }
-    }
-    async isCallerAdmin(): Promise<boolean> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.isCallerAdmin();
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.isCallerAdmin();
-            return result;
-        }
-    }
-    async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.saveCallerUserProfile(arg0);
-                return result;
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.saveCallerUserProfile(arg0);
-            return result;
+            return await this.actor._initializeAccessControlWithSecret(arg0);
         }
     }
     async submitBooking(arg0: BookingSubmission): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.submitBooking(arg0);
-                return result;
+                return await this.actor.submitBooking(arg0);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.submitBooking(arg0);
-            return result;
+            return await this.actor.submitBooking(arg0);
         }
     }
-}
-function from_candid_UserRole_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
-    return from_candid_variant_n5(_uploadFile, _downloadFile, value);
-}
-function from_candid_opt_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
-    return value.length === 0 ? null : value[0];
-}
-function from_candid_variant_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
-    admin: null;
-} | {
-    user: null;
-} | {
-    guest: null;
-}): UserRole {
-    return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
-}
-function to_candid_UserRole_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {
-    return to_candid_variant_n2(_uploadFile, _downloadFile, value);
-}
-function to_candid_variant_n2(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {
-    admin: null;
-} | {
-    user: null;
-} | {
-    guest: null;
-} {
-    return value == UserRole.admin ? {
-        admin: null
-    } : value == UserRole.user ? {
-        user: null
-    } : value == UserRole.guest ? {
-        guest: null
-    } : value;
+    async registerUser(arg0: string, arg1: string): Promise<{ ok: null } | { err: string }> {
+        if (this.processError) {
+            try {
+                return await this.actor.registerUser(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.registerUser(arg0, arg1);
+        }
+    }
+    async authenticateUser(arg0: string, arg1: string): Promise<{ ok: string } | { err: string }> {
+        if (this.processError) {
+            try {
+                return await this.actor.authenticateUser(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.authenticateUser(arg0, arg1);
+        }
+    }
+    async registerAdmin(arg0: string, arg1: string): Promise<{ ok: null } | { err: string }> {
+        if (this.processError) {
+            try {
+                return await this.actor.registerAdmin(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.registerAdmin(arg0, arg1);
+        }
+    }
+    async getTechnicianBookings(): Promise<Array<Booking>> {
+        if (this.processError) {
+            try {
+                return await this.actor.getTechnicianBookings();
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.getTechnicianBookings();
+        }
+    }
+    async updateBookingStatus(arg0: string, arg1: string): Promise<{ ok: null } | { err: string }> {
+        if (this.processError) {
+            try {
+                return await this.actor.updateBookingStatus(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.updateBookingStatus(arg0, arg1);
+        }
+    }
+    async getBookingsAuthenticated(arg0: string, arg1: string): Promise<{ ok: Array<Booking> } | { err: string }> {
+        if (this.processError) {
+            try {
+                return await this.actor.getBookingsAuthenticated(arg0, arg1);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            return await this.actor.getBookingsAuthenticated(arg0, arg1);
+        }
+    }
 }
 export interface CreateActorOptions {
     agent?: Agent;
