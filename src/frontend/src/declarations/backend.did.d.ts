@@ -11,6 +11,7 @@ export interface Booking {
   'userEmail' : string,
   'dateTime' : string,
   'status' : string,
+  'assignedTechnician' : string,
   'timestamp' : Time,
 }
 export type BookingId = string;
@@ -20,6 +21,11 @@ export interface BookingSubmission {
   'userEmail' : string,
   'dateTime' : string,
   'timestamp' : Time,
+}
+export interface Technician {
+  'id' : string,
+  'name' : string,
+  'email' : string,
 }
 export type Time = bigint;
 export interface UserProfile { 'name' : string }
@@ -40,6 +46,9 @@ export interface _SERVICE {
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'submitBooking' : ActorMethod<[BookingSubmission], undefined>,
   'updateBookingStatus' : ActorMethod<[string, string], { 'ok' : null } | { 'err' : string }>,
+  'getTechnicians' : ActorMethod<[], Array<Technician>>,
+  'addTechnician' : ActorMethod<[string, string], { 'ok' : string } | { 'err' : string }>,
+  'assignTechnicianToBooking' : ActorMethod<[string, string], { 'ok' : null } | { 'err' : string }>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -22,11 +22,13 @@ import {
   LogIn,
   LogOut,
   Mail,
+  Plus,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
   UserCheck,
   UserPlus,
+  Users,
   Wrench,
   Zap,
 } from "lucide-react";
@@ -37,20 +39,19 @@ import type { Booking } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useAuth } from "../hooks/useAuth";
 import {
+  type Technician,
+  useAddTechnician,
+  useAssignTechnician,
   useGetAdminBookings,
+  useGetTechnicians,
   useUpdateBookingStatus,
 } from "../hooks/useQueries";
 import { hashPassword } from "../utils/hashPassword";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// Extend Booking to include assignedTechnician from backend
+type BookingEx = Booking & { assignedTechnician?: string };
 
-const TECHNICIAN_OPTIONS = [
-  "Ramesh Kumar",
-  "Suresh Verma",
-  "Prakash Singh",
-  "Vijay Yadav",
-  "Other",
-];
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 const SERVICE_COLORS: Record<string, string> = {
   "Electric Repair": "bg-red-50 text-red-700 border-red-200",
@@ -126,10 +127,12 @@ function StatCard({ label, value, icon, accent }: StatCardProps) {
 // ─── booking card (mobile only) ─────────────────────────────────────────────
 
 interface BookingCardProps {
-  booking: Booking;
+  booking: BookingEx;
   index: number;
   onUpdateStatus: (id: string, status: string) => void;
   isPending: boolean;
+  technicians: Technician[];
+  onAssign: (bookingId: string, techName: string) => void;
 }
 
 function BookingCard({
@@ -137,18 +140,17 @@ function BookingCard({
   index,
   onUpdateStatus,
   isPending,
+  technicians,
+  onAssign,
 }: BookingCardProps) {
   const storagePrefix = `mes_booking_${booking.bookingId}`;
 
-  const [techInput, setTechInput] = useState(
-    () => localStorage.getItem(`${storagePrefix}_tech`) ?? "",
-  );
-  const [assignedTech, setAssignedTech] = useState(
-    () => localStorage.getItem(`${storagePrefix}_tech_saved`) ?? "",
-  );
   const [paid, setPaid] = useState(
     () => localStorage.getItem(`${storagePrefix}_paid`) === "true",
   );
+  const [selectedTech, setSelectedTech] = useState("");
+
+  const assignedTech = booking.assignedTechnician ?? "";
 
   const { label: statusLabel, className: statusClass } = statusMeta(
     booking.status,
@@ -158,11 +160,9 @@ function BookingCard({
     "bg-gray-50 text-gray-700 border-gray-200";
 
   function handleAssign() {
-    if (!techInput.trim()) return;
-    localStorage.setItem(`${storagePrefix}_tech`, techInput.trim());
-    localStorage.setItem(`${storagePrefix}_tech_saved`, techInput.trim());
-    setAssignedTech(techInput.trim());
-    toast.success(`Technician "${techInput.trim()}" assigned!`);
+    if (!selectedTech) return;
+    onAssign(booking.bookingId, selectedTech);
+    setSelectedTech("");
   }
 
   function togglePayment() {
@@ -239,32 +239,51 @@ function BookingCard({
                     {assignedTech}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAssignedTech("");
-                    setTechInput("");
-                    localStorage.removeItem(`${storagePrefix}_tech_saved`);
-                  }}
-                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  Change
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedTech}
+                    onChange={(e) => setSelectedTech(e.target.value)}
+                    className="h-7 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    data-ocid={`admin.select.${index + 1}`}
+                  >
+                    <option value="">Change…</option>
+                    {technicians.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTech && (
+                    <Button
+                      size="sm"
+                      onClick={handleAssign}
+                      className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2"
+                      data-ocid={`admin.save_button.${index + 1}`}
+                    >
+                      <Wrench className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="flex gap-2">
-                <Input
-                  placeholder="Assign technician…"
-                  value={techInput}
-                  onChange={(e) => setTechInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAssign()}
-                  className="h-8 text-xs border-gray-200"
-                  data-ocid="admin.input"
-                />
+                <select
+                  value={selectedTech}
+                  onChange={(e) => setSelectedTech(e.target.value)}
+                  className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  data-ocid={`admin.select.${index + 1}`}
+                >
+                  <option value="">— Select Technician —</option>
+                  {technicians.map((t) => (
+                    <option key={t.id} value={t.name}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   size="sm"
                   onClick={handleAssign}
-                  disabled={!techInput.trim()}
+                  disabled={!selectedTech}
                   className="h-8 shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
                   data-ocid={`admin.save_button.${index + 1}`}
                 >
@@ -340,21 +359,21 @@ function BookingCard({
 // ─── desktop table row ───────────────────────────────────────────────────────
 
 interface BookingTableRowProps {
-  booking: Booking;
+  booking: BookingEx;
   index: number;
   onUpdateStatus: (id: string, status: string) => void;
+  technicians: Technician[];
+  onAssign: (bookingId: string, techName: string) => void;
 }
 
 function BookingTableRow({
   booking,
   index,
   onUpdateStatus,
+  technicians,
+  onAssign,
 }: BookingTableRowProps) {
-  const storagePrefix = `mes_booking_${booking.bookingId}`;
-
-  const [assignedTech, setAssignedTech] = useState(
-    () => localStorage.getItem(`${storagePrefix}_tech_saved`) ?? "",
-  );
+  const assignedTech = booking.assignedTechnician ?? "";
 
   const { label: statusLabel, className: statusClass } = statusMeta(
     booking.status,
@@ -368,9 +387,7 @@ function BookingTableRow({
   function handleTechChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const val = e.target.value;
     if (!val) return;
-    localStorage.setItem(`${storagePrefix}_tech_saved`, val);
-    setAssignedTech(val);
-    toast.success("Technician assigned!");
+    onAssign(booking.bookingId, val);
   }
 
   function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -462,7 +479,7 @@ function BookingTableRow({
 
       {/* Actions */}
       <TableCell className="py-3 px-4">
-        <div className="flex flex-col gap-1.5 min-w-[140px]">
+        <div className="flex flex-col gap-1.5 min-w-[160px]">
           {/* Assign Technician */}
           <select
             value={assignedTech}
@@ -471,9 +488,9 @@ function BookingTableRow({
             data-ocid={`admin.select.${index + 1}`}
           >
             <option value="">— Assign —</option>
-            {TECHNICIAN_OPTIONS.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            {technicians.map((t) => (
+              <option key={t.id} value={t.name}>
+                {t.name}
               </option>
             ))}
           </select>
@@ -492,6 +509,114 @@ function BookingTableRow({
         </div>
       </TableCell>
     </TableRow>
+  );
+}
+
+// ─── Add Technician Form ─────────────────────────────────────────────────────
+
+interface AddTechnicianFormProps {
+  onAdd: (name: string, email: string) => Promise<void>;
+  isAdding: boolean;
+}
+
+function AddTechnicianForm({ onAdd, isAdding }: AddTechnicianFormProps) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await onAdd(name.trim(), email.trim());
+    setName("");
+    setEmail("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-5 mb-6">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between text-sm font-semibold text-gray-800"
+        data-ocid="admin.open_modal_button"
+      >
+        <span className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-blue-600" />
+          Manage Technicians
+        </span>
+        <Plus
+          className={`h-4 w-4 text-blue-600 transition-transform duration-200 ${
+            open ? "rotate-45" : ""
+          }`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="mt-4 flex flex-wrap gap-3 items-end"
+            >
+              <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+                <Label
+                  htmlFor="tech-name"
+                  className="text-xs font-medium text-gray-600"
+                >
+                  Technician Name *
+                </Label>
+                <Input
+                  id="tech-name"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="h-9 text-sm border-gray-200"
+                  data-ocid="admin.input"
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+                <Label
+                  htmlFor="tech-email"
+                  className="text-xs font-medium text-gray-600"
+                >
+                  Email (optional)
+                </Label>
+                <Input
+                  id="tech-email"
+                  type="email"
+                  placeholder="technician@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-9 text-sm border-gray-200"
+                  data-ocid="admin.input"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={isAdding || !name.trim()}
+                className="h-9 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 shrink-0"
+                data-ocid="admin.submit_button"
+              >
+                {isAdding ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Add Technician
+              </Button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -528,9 +653,14 @@ export default function AdminPage() {
     isFetching,
   } = useGetAdminBookings(adminEmail, adminHash);
 
+  const { data: technicians = [] } = useGetTechnicians();
   const updateStatus = useUpdateBookingStatus();
+  const assignTechnician = useAssignTechnician();
+  const addTechnician = useAddTechnician();
 
-  const sortedBookings: Booking[] = [...bookings].sort((a, b) =>
+  const bookingsEx = bookings as BookingEx[];
+
+  const sortedBookings: BookingEx[] = [...bookingsEx].sort((a, b) =>
     sortNewest
       ? Number(b.timestamp - a.timestamp)
       : Number(a.timestamp - b.timestamp),
@@ -583,7 +713,6 @@ export default function AdminPage() {
     setLoginEmail("");
     setLoginPassword("");
     setLoginError("");
-    // Redirect to admin login page
     window.location.href = "/admin-login";
   }
 
@@ -617,6 +746,32 @@ export default function AdminPage() {
     } catch (err: unknown) {
       toast.error(
         err instanceof Error ? err.message : "Failed to update status.",
+      );
+    }
+  }
+
+  async function handleAssignTechnician(bookingId: string, techName: string) {
+    try {
+      await assignTechnician.mutateAsync({
+        bookingId,
+        technicianName: techName,
+      });
+      toast.success(`Technician "${techName}" assigned!`);
+      refetch();
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to assign technician.",
+      );
+    }
+  }
+
+  async function handleAddTechnician(name: string, email: string) {
+    try {
+      await addTechnician.mutateAsync({ name, email });
+      toast.success(`Technician "${name}" added!`);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to add technician.",
       );
     }
   }
@@ -871,6 +1026,12 @@ export default function AdminPage() {
                 />
               </div>
 
+              {/* ── Add Technician Section ── */}
+              <AddTechnicianForm
+                onAdd={handleAddTechnician}
+                isAdding={addTechnician.isPending}
+              />
+
               {/* ── Filter / sort bar ── */}
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-medium text-gray-700">
@@ -943,6 +1104,8 @@ export default function AdminPage() {
                         index={idx}
                         onUpdateStatus={handleUpdateStatus}
                         isPending={updateStatus.isPending}
+                        technicians={technicians}
+                        onAssign={handleAssignTechnician}
                       />
                     ))}
                   </div>
@@ -985,6 +1148,8 @@ export default function AdminPage() {
                             booking={booking}
                             index={idx}
                             onUpdateStatus={handleUpdateStatus}
+                            technicians={technicians}
+                            onAssign={handleAssignTechnician}
                           />
                         ))}
                       </TableBody>
