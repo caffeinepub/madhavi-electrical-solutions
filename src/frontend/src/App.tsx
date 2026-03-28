@@ -84,10 +84,12 @@ export default function App() {
   }, []);
 
   const pathname = window.location.pathname;
-  // These routes handle their own auth — bypass global auth gate
-  const isTechnicianRoute = pathname.startsWith("/technician");
+
+  // Exact path checks — order matters, more specific first
   const isAdminLoginRoute = pathname === "/admin-login";
   const isTechnicianLoginRoute = pathname === "/technician-login";
+  const isTechnicianRoute = pathname === "/technician";
+  const isAdminRoute = pathname === "/admin";
 
   if (showSplash) {
     return (
@@ -97,16 +99,7 @@ export default function App() {
     );
   }
 
-  // Render standalone pages directly — they handle their own auth
-  if (isTechnicianRoute) {
-    return (
-      <>
-        <Toaster theme="light" position="top-center" richColors />
-        <TechnicianPage />
-      </>
-    );
-  }
-
+  // Standalone pages — each handles its own auth
   if (isAdminLoginRoute) {
     return (
       <>
@@ -125,6 +118,25 @@ export default function App() {
     );
   }
 
+  if (isTechnicianRoute) {
+    return (
+      <>
+        <Toaster theme="light" position="top-center" richColors />
+        <TechnicianPage />
+      </>
+    );
+  }
+
+  if (isAdminRoute) {
+    return (
+      <>
+        <Toaster theme="light" position="top-center" richColors />
+        <AdminPage />
+      </>
+    );
+  }
+
+  // Customer flow — requires login
   if (!isLoggedIn) {
     return showSignup ? (
       <SignupPage

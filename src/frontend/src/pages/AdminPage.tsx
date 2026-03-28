@@ -10,21 +10,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Link } from "@tanstack/react-router";
 import {
-  ArrowUpDown,
-  CheckCircle,
+  ArrowDownUp,
+  Calendar,
+  CheckCircle2,
   ChevronLeft,
+  ClipboardList,
+  Clock,
+  DollarSign,
   Loader2,
   LogIn,
   LogOut,
+  Mail,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
+  UserCheck,
   UserPlus,
+  Wrench,
   Zap,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Booking } from "../backend";
@@ -36,37 +42,473 @@ import {
 } from "../hooks/useQueries";
 import { hashPassword } from "../utils/hashPassword";
 
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+const TECHNICIAN_OPTIONS = [
+  "Ramesh Kumar",
+  "Suresh Verma",
+  "Prakash Singh",
+  "Vijay Yadav",
+  "Other",
+];
+
 const SERVICE_COLORS: Record<string, string> = {
-  "Electric Repair": "bg-red-500/10 text-red-400 border-red-500/20",
-  Wiring: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  "Panel Work": "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  Maintenance: "bg-green-500/10 text-green-400 border-green-500/20",
+  "Electric Repair": "bg-red-50 text-red-700 border-red-200",
+  Wiring: "bg-blue-50 text-blue-700 border-blue-200",
+  "Panel Work": "bg-purple-50 text-purple-700 border-purple-200",
+  Maintenance: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  accepted: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  completed: "bg-green-500/10 text-green-400 border-green-500/20",
-};
+function statusMeta(status: string) {
+  if (status === "pending")
+    return {
+      label: "Pending",
+      className: "bg-amber-50 text-amber-700 border-amber-200",
+    };
+  if (status === "accepted" || status === "in-progress")
+    return {
+      label: "In Progress",
+      className: "bg-blue-50 text-blue-700 border-blue-200",
+    };
+  if (status === "completed")
+    return {
+      label: "Completed",
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  return {
+    label: status,
+    className: "bg-gray-50 text-gray-700 border-gray-200",
+  };
+}
 
-function formatTimestamp(ts: bigint): string {
-  const ms = Number(ts);
+function formatDateTime(ts: bigint): string {
   return new Intl.DateTimeFormat("en-IN", {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(ms));
+  }).format(new Date(Number(ts)));
 }
+
+function statusToSelectValue(status: string): string {
+  if (status === "pending") return "Pending";
+  if (status === "accepted" || status === "in-progress") return "In Progress";
+  if (status === "completed") return "Completed";
+  return "Pending";
+}
+
+// ─── stat card ──────────────────────────────────────────────────────────────
+
+interface StatCardProps {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  accent: string;
+}
+
+function StatCard({ label, value, icon, accent }: StatCardProps) {
+  return (
+    <div
+      className={`rounded-xl border bg-white p-5 shadow-sm flex items-center gap-4 ${accent}`}
+    >
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
+        {icon}
+      </div>
+      <div>
+        <p className="text-2xl font-bold text-gray-900">{value}</p>
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── booking card (mobile only) ─────────────────────────────────────────────
+
+interface BookingCardProps {
+  booking: Booking;
+  index: number;
+  onUpdateStatus: (id: string, status: string) => void;
+  isPending: boolean;
+}
+
+function BookingCard({
+  booking,
+  index,
+  onUpdateStatus,
+  isPending,
+}: BookingCardProps) {
+  const storagePrefix = `mes_booking_${booking.bookingId}`;
+
+  const [techInput, setTechInput] = useState(
+    () => localStorage.getItem(`${storagePrefix}_tech`) ?? "",
+  );
+  const [assignedTech, setAssignedTech] = useState(
+    () => localStorage.getItem(`${storagePrefix}_tech_saved`) ?? "",
+  );
+  const [paid, setPaid] = useState(
+    () => localStorage.getItem(`${storagePrefix}_paid`) === "true",
+  );
+
+  const { label: statusLabel, className: statusClass } = statusMeta(
+    booking.status,
+  );
+  const serviceClass =
+    SERVICE_COLORS[booking.serviceType] ??
+    "bg-gray-50 text-gray-700 border-gray-200";
+
+  function handleAssign() {
+    if (!techInput.trim()) return;
+    localStorage.setItem(`${storagePrefix}_tech`, techInput.trim());
+    localStorage.setItem(`${storagePrefix}_tech_saved`, techInput.trim());
+    setAssignedTech(techInput.trim());
+    toast.success(`Technician "${techInput.trim()}" assigned!`);
+  }
+
+  function togglePayment() {
+    const next = !paid;
+    setPaid(next);
+    localStorage.setItem(`${storagePrefix}_paid`, String(next));
+    toast.success(next ? "Marked as Paid" : "Marked as Unpaid");
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.04 }}
+      className="rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+      data-ocid={`admin.item.${index + 1}`}
+    >
+      {/* top accent strip based on status */}
+      <div
+        className={`h-1 w-full rounded-t-xl ${
+          booking.status === "completed"
+            ? "bg-emerald-400"
+            : booking.status === "accepted"
+              ? "bg-blue-400"
+              : "bg-amber-400"
+        }`}
+      />
+
+      <div className="p-5">
+        {/* header row */}
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Mail className="h-4 w-4 shrink-0 text-blue-500" />
+            <span className="truncate text-sm font-semibold text-gray-800">
+              {booking.userEmail}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge
+              variant="outline"
+              className={`text-xs font-medium ${serviceClass}`}
+            >
+              {booking.serviceType}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={`text-xs font-semibold ${statusClass}`}
+            >
+              {statusLabel}
+            </Badge>
+          </div>
+        </div>
+
+        {/* description */}
+        <p className="line-clamp-2 text-sm text-gray-600 mb-3">
+          {booking.description}
+        </p>
+
+        {/* date */}
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-4">
+          <Calendar className="h-3.5 w-3.5" />
+          <span>{booking.dateTime || formatDateTime(booking.timestamp)}</span>
+        </div>
+
+        {/* divider */}
+        <div className="border-t border-gray-100 pt-4 space-y-3">
+          {/* technician assignment */}
+          <div>
+            {assignedTech ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-emerald-500" />
+                  <span className="text-sm font-medium text-gray-700">
+                    {assignedTech}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignedTech("");
+                    setTechInput("");
+                    localStorage.removeItem(`${storagePrefix}_tech_saved`);
+                  }}
+                  className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Assign technician…"
+                  value={techInput}
+                  onChange={(e) => setTechInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAssign()}
+                  className="h-8 text-xs border-gray-200"
+                  data-ocid="admin.input"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAssign}
+                  disabled={!techInput.trim()}
+                  className="h-8 shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
+                  data-ocid={`admin.save_button.${index + 1}`}
+                >
+                  <Wrench className="h-3 w-3 mr-1" /> Assign
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* payment + status actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* payment toggle */}
+            <button
+              type="button"
+              onClick={togglePayment}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                paid
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : "border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+              }`}
+              data-ocid="admin.toggle"
+            >
+              <DollarSign className="h-3 w-3" />
+              {paid ? "Paid" : "Unpaid"}
+            </button>
+
+            {/* status progression */}
+            {booking.status === "pending" && (
+              <Button
+                size="sm"
+                onClick={() => onUpdateStatus(booking.bookingId, "accepted")}
+                disabled={isPending}
+                className="h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3"
+                data-ocid={`admin.edit_button.${index + 1}`}
+              >
+                {isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <Clock className="h-3 w-3 mr-1" />
+                )}
+                Mark In Progress
+              </Button>
+            )}
+            {(booking.status === "accepted" ||
+              booking.status === "in-progress") && (
+              <Button
+                size="sm"
+                onClick={() => onUpdateStatus(booking.bookingId, "completed")}
+                disabled={isPending}
+                className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3"
+                data-ocid={`admin.save_button.${index + 1}`}
+              >
+                {isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                )}
+                Mark Completed
+              </Button>
+            )}
+            {booking.status === "completed" && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Completed
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── desktop table row ───────────────────────────────────────────────────────
+
+interface BookingTableRowProps {
+  booking: Booking;
+  index: number;
+  onUpdateStatus: (id: string, status: string) => void;
+}
+
+function BookingTableRow({
+  booking,
+  index,
+  onUpdateStatus,
+}: BookingTableRowProps) {
+  const storagePrefix = `mes_booking_${booking.bookingId}`;
+
+  const [assignedTech, setAssignedTech] = useState(
+    () => localStorage.getItem(`${storagePrefix}_tech_saved`) ?? "",
+  );
+
+  const { label: statusLabel, className: statusClass } = statusMeta(
+    booking.status,
+  );
+  const serviceClass =
+    SERVICE_COLORS[booking.serviceType] ??
+    "bg-gray-50 text-gray-700 border-gray-200";
+
+  const currentStatusValue = statusToSelectValue(booking.status);
+
+  function handleTechChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    if (!val) return;
+    localStorage.setItem(`${storagePrefix}_tech_saved`, val);
+    setAssignedTech(val);
+    toast.success("Technician assigned!");
+  }
+
+  function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const val = e.target.value;
+    if (val === "Pending") {
+      toast.warning("Cannot revert to pending");
+      return;
+    }
+    if (val === "In Progress") {
+      onUpdateStatus(booking.bookingId, "accepted");
+    } else if (val === "Completed") {
+      onUpdateStatus(booking.bookingId, "completed");
+    }
+  }
+
+  const truncatedDesc =
+    booking.description.length > 60
+      ? `${booking.description.slice(0, 60)}…`
+      : booking.description;
+
+  return (
+    <TableRow
+      className="hover:bg-gray-50 border-b border-gray-100"
+      data-ocid={`admin.row.${index + 1}`}
+    >
+      {/* Customer Email */}
+      <TableCell className="py-3 px-4">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Mail className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+          <span className="text-xs font-medium text-gray-800 truncate max-w-[160px]">
+            {booking.userEmail}
+          </span>
+        </div>
+      </TableCell>
+
+      {/* Service Type */}
+      <TableCell className="py-3 px-4">
+        <Badge
+          variant="outline"
+          className={`text-xs font-medium whitespace-nowrap ${serviceClass}`}
+        >
+          {booking.serviceType}
+        </Badge>
+      </TableCell>
+
+      {/* Problem */}
+      <TableCell className="py-3 px-4 max-w-[200px]">
+        <span
+          title={booking.description}
+          className="text-xs text-gray-600 leading-relaxed cursor-default"
+        >
+          {truncatedDesc}
+        </span>
+      </TableCell>
+
+      {/* Date & Time */}
+      <TableCell className="py-3 px-4 whitespace-nowrap">
+        <div className="flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span className="text-xs text-gray-600">
+            {booking.dateTime || formatDateTime(booking.timestamp)}
+          </span>
+        </div>
+      </TableCell>
+
+      {/* Status */}
+      <TableCell className="py-3 px-4">
+        <Badge
+          variant="outline"
+          className={`text-xs font-semibold whitespace-nowrap ${statusClass}`}
+        >
+          {statusLabel}
+        </Badge>
+      </TableCell>
+
+      {/* Assigned Technician */}
+      <TableCell className="py-3 px-4">
+        {assignedTech ? (
+          <div className="flex items-center gap-1.5">
+            <UserCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+              {assignedTech}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        )}
+      </TableCell>
+
+      {/* Actions */}
+      <TableCell className="py-3 px-4">
+        <div className="flex flex-col gap-1.5 min-w-[140px]">
+          {/* Assign Technician */}
+          <select
+            value={assignedTech}
+            onChange={handleTechChange}
+            className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            data-ocid={`admin.select.${index + 1}`}
+          >
+            <option value="">— Assign —</option>
+            {TECHNICIAN_OPTIONS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+
+          {/* Change Status */}
+          <select
+            value={currentStatusValue}
+            onChange={handleStatusChange}
+            className="h-8 w-full rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            data-ocid={`admin.select.${index + 1}`}
+          >
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+          </select>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ─── main page ───────────────────────────────────────────────────────────────
 
 export default function AdminPage() {
   const { getEmail, getPasswordHash } = useAuth();
   const { actor } = useActor();
 
-  // Local admin session (separate from regular user session)
-  const [adminEmail, setAdminEmail] = useState<string | null>(null);
-  const [adminHash, setAdminHash] = useState<string | null>(null);
+  // Restore admin session from sessionStorage (set by AdminLoginPage after /admin-login)
+  const [adminEmail, setAdminEmail] = useState<string | null>(
+    () => sessionStorage.getItem("mes_admin_session") ?? null,
+  );
+  const [adminHash, setAdminHash] = useState<string | null>(
+    () => sessionStorage.getItem("mes_admin_hash") ?? null,
+  );
+
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -74,11 +516,9 @@ export default function AdminPage() {
   const [sortNewest, setSortNewest] = useState(true);
   const [registerLoading, setRegisterLoading] = useState(false);
 
-  // Is there an existing app session we can use for "Register as Admin"?
   const sessionEmail = getEmail();
   const sessionHash = getPasswordHash();
   const hasAppSession = !!(sessionEmail && sessionHash);
-
   const isAdminLoggedIn = !!(adminEmail && adminHash);
 
   const {
@@ -96,6 +536,12 @@ export default function AdminPage() {
       : Number(a.timestamp - b.timestamp),
   );
 
+  const totalCount = bookings.length;
+  const pendingCount = bookings.filter((b) => b.status === "pending").length;
+  const completedCount = bookings.filter(
+    (b) => b.status === "completed",
+  ).length;
+
   async function handleAdminLogin(e: React.FormEvent) {
     e.preventDefault();
     if (!actor) return;
@@ -105,8 +551,9 @@ export default function AdminPage() {
       const hash = await hashPassword(loginPassword);
       const result = await (actor as any).authenticateUser(loginEmail, hash);
       if ("ok" in result) {
-        const role = result.ok;
-        if (role === "admin") {
+        if (result.ok === "admin") {
+          sessionStorage.setItem("mes_admin_session", loginEmail);
+          sessionStorage.setItem("mes_admin_hash", hash);
           setAdminEmail(loginEmail);
           setAdminHash(hash);
           toast.success("Admin access granted!");
@@ -129,11 +576,15 @@ export default function AdminPage() {
   }
 
   function handleAdminLogout() {
+    sessionStorage.removeItem("mes_admin_session");
+    sessionStorage.removeItem("mes_admin_hash");
     setAdminEmail(null);
     setAdminHash(null);
     setLoginEmail("");
     setLoginPassword("");
     setLoginError("");
+    // Redirect to admin login page
+    window.location.href = "/admin-login";
   }
 
   async function handleRegisterAdmin() {
@@ -159,7 +610,9 @@ export default function AdminPage() {
   async function handleUpdateStatus(bookingId: string, newStatus: string) {
     try {
       await updateStatus.mutateAsync({ bookingId, newStatus });
-      toast.success(`Job marked as ${newStatus}!`);
+      toast.success(
+        `Job marked as ${newStatus === "accepted" ? "In Progress" : "Completed"}!`,
+      );
       refetch();
     } catch (err: unknown) {
       toast.error(
@@ -169,211 +622,270 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="flex items-center gap-2" data-ocid="nav.link">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-electric text-primary-foreground">
+    <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-50 border-b border-blue-100 bg-white shadow-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+          {/* logo */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white shadow">
               <Zap className="h-5 w-5" fill="currentColor" />
             </div>
-            <span className="hidden font-display text-sm font-bold uppercase tracking-widest text-foreground sm:block">
-              Madhavi Electrical
-            </span>
-          </Link>
+            <div className="hidden sm:block">
+              <p className="text-sm font-bold text-gray-900 leading-none">
+                MES Infratech
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Admin Dashboard</p>
+            </div>
+          </div>
 
+          {/* right actions */}
           <div className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-electric"
+            <a
+              href="/"
+              className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition-colors"
               data-ocid="nav.link"
             >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="hidden sm:block">Back to Home</span>
-            </Link>
+              <ChevronLeft className="h-3.5 w-3.5" /> Home
+            </a>
 
             {isAdminLoggedIn && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAdminLogout}
-                className="border-border text-muted-foreground hover:border-destructive hover:text-destructive"
-                data-ocid="admin.secondary_button"
-              >
-                <LogOut className="mr-1.5 h-3.5 w-3.5" />
-                Logout
-              </Button>
+              <>
+                <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+                  <span className="text-xs font-medium text-blue-700 max-w-[160px] truncate">
+                    {adminEmail}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAdminLogout}
+                  className="border-red-200 text-red-600 hover:border-red-400 hover:bg-red-50 text-xs"
+                  data-ocid="admin.secondary_button"
+                >
+                  <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
+                </Button>
+              </>
             )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="mb-8">
-            <div className="mb-2 flex items-center gap-2">
-              <div className="h-1 w-8 rounded-full bg-electric" />
-            </div>
-            <h1 className="font-display text-2xl font-bold uppercase tracking-widest text-foreground sm:text-3xl">
-              Admin Dashboard
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage and view all incoming service bookings.
-            </p>
-          </div>
-
-          {/* Not logged in as admin — show login form */}
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <AnimatePresence mode="wait">
+          {/* ── Login form ── */}
           {!isAdminLoggedIn && (
-            <div
-              className="mx-auto max-w-md rounded-xl border border-border bg-card p-8"
-              data-ocid="admin.panel"
+            <motion.div
+              key="login"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.35 }}
+              className="mx-auto max-w-md"
             >
-              <div className="mb-6 flex flex-col items-center gap-3 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-electric/10">
-                  <ShieldCheck className="h-7 w-7 text-electric" />
-                </div>
-                <div>
-                  <h2 className="font-display text-xl font-bold text-foreground">
-                    Admin Access
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Sign in with your admin account to continue.
-                  </p>
-                </div>
+              {/* page heading */}
+              <div className="mb-8 text-center">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Admin Portal
+                </h1>
+                <p className="mt-1 text-sm text-gray-500">
+                  Madhavi Electrical Solutions — Secure Access
+                </p>
+                <p className="mt-2 text-xs text-gray-400">
+                  Use{" "}
+                  <a
+                    href="/admin-login"
+                    className="text-blue-600 hover:underline"
+                  >
+                    /admin-login
+                  </a>{" "}
+                  for dedicated admin login
+                </p>
               </div>
 
-              <form onSubmit={handleAdminLogin} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="admin-email" className="text-sm font-medium">
-                    Email Address
-                  </Label>
-                  <Input
-                    id="admin-email"
-                    type="email"
-                    placeholder="admin@example.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    required
-                    className="h-11 border-border bg-background"
-                    data-ocid="admin.input"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <Label
-                    htmlFor="admin-password"
-                    className="text-sm font-medium"
-                  >
-                    Password
-                  </Label>
-                  <Input
-                    id="admin-password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    className="h-11 border-border bg-background"
-                    data-ocid="admin.input"
-                  />
-                </div>
-
-                {loginError && (
-                  <div
-                    className="flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3"
-                    data-ocid="admin.error_state"
-                  >
-                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                    <p className="text-sm font-medium text-destructive">
-                      {loginError}
+              <div
+                className="rounded-2xl border border-gray-200 bg-white shadow-md p-8"
+                data-ocid="admin.panel"
+              >
+                {/* icon */}
+                <div className="mb-6 flex flex-col items-center gap-3 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg">
+                    <ShieldCheck className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">
+                      Admin Login
+                    </h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Sign in to manage bookings
                     </p>
                   </div>
-                )}
+                </div>
 
-                <Button
-                  type="submit"
-                  disabled={loginLoading || !actor}
-                  className="h-11 w-full bg-electric font-semibold text-primary-foreground hover:bg-electric-dim"
-                  data-ocid="admin.submit_button"
+                <form
+                  onSubmit={handleAdminLogin}
+                  className="flex flex-col gap-4"
                 >
-                  {loginLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                      Verifying…
-                    </>
-                  ) : (
-                    <>
-                      <LogIn className="mr-2 h-4 w-4" /> Sign in as Admin
-                    </>
-                  )}
-                </Button>
-              </form>
+                  <div className="flex flex-col gap-1.5">
+                    <Label
+                      htmlFor="admin-email"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Email Address
+                    </Label>
+                    <Input
+                      id="admin-email"
+                      type="email"
+                      placeholder="admin@example.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      required
+                      className="h-11 border-gray-200"
+                      data-ocid="admin.input"
+                    />
+                  </div>
 
-              {/* Register as Admin — only visible if user has an active app session */}
-              {hasAppSession && (
-                <div className="mt-6 border-t border-border pt-5">
-                  <p className="mb-3 text-center text-xs text-muted-foreground">
-                    Logged in as{" "}
-                    <span className="font-medium text-foreground">
-                      {sessionEmail}
-                    </span>
-                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    <Label
+                      htmlFor="admin-password"
+                      className="text-sm font-medium text-gray-700"
+                    >
+                      Password
+                    </Label>
+                    <Input
+                      id="admin-password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      className="h-11 border-gray-200"
+                      data-ocid="admin.input"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <div
+                      className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3"
+                      data-ocid="admin.error_state"
+                    >
+                      <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                      <p className="text-sm text-red-700">{loginError}</p>
+                    </div>
+                  )}
+
                   <Button
-                    variant="outline"
-                    className="w-full border-dashed border-electric/40 text-electric hover:border-electric hover:bg-electric/5"
-                    onClick={handleRegisterAdmin}
-                    disabled={registerLoading}
-                    data-ocid="admin.open_modal_button"
+                    type="submit"
+                    disabled={loginLoading || !actor}
+                    className="h-11 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm"
+                    data-ocid="admin.submit_button"
                   >
-                    {registerLoading ? (
+                    {loginLoading ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                        Registering…
+                        Verifying…
                       </>
                     ) : (
                       <>
-                        <UserPlus className="mr-2 h-4 w-4" /> Register Current
-                        Account as Admin
+                        <LogIn className="mr-2 h-4 w-4" /> Sign in as Admin
                       </>
                     )}
                   </Button>
-                  <p className="mt-2 text-center text-xs text-muted-foreground">
-                    This grants your logged-in account admin privileges.
-                  </p>
-                </div>
-              )}
-            </div>
+                </form>
+
+                {hasAppSession && (
+                  <div className="mt-6 border-t border-gray-100 pt-5">
+                    <p className="mb-3 text-center text-xs text-gray-500">
+                      Logged in as{" "}
+                      <span className="font-semibold text-gray-700">
+                        {sessionEmail}
+                      </span>
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full border-dashed border-blue-300 text-blue-600 hover:border-blue-500 hover:bg-blue-50 text-sm"
+                      onClick={handleRegisterAdmin}
+                      disabled={registerLoading}
+                      data-ocid="admin.open_modal_button"
+                    >
+                      {registerLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                          Registering…
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="mr-2 h-4 w-4" /> Register Account
+                          as Admin
+                        </>
+                      )}
+                    </Button>
+                    <p className="mt-2 text-center text-xs text-gray-400">
+                      Grants your current session account admin privileges.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
           )}
 
-          {/* Admin dashboard */}
+          {/* ── Dashboard ── */}
           {isAdminLoggedIn && (
-            <div className="rounded-xl border border-border bg-card p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="font-display text-lg font-bold uppercase tracking-wide text-foreground">
-                    Service Bookings
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {bookings.length}{" "}
-                    {bookings.length === 1 ? "booking" : "bookings"} total
-                    {adminEmail && (
-                      <span className="ml-2 text-electric">• {adminEmail}</span>
-                    )}
-                  </p>
-                </div>
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.35 }}
+            >
+              {/* page title */}
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Admin Dashboard
+                </h1>
+                <p className="text-sm text-gray-500 mt-1">
+                  MES Infratech — All service bookings overview
+                </p>
+              </div>
+
+              {/* ── Stat cards ── */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-8">
+                <StatCard
+                  label="Total Bookings"
+                  value={totalCount}
+                  icon={<ClipboardList className="h-6 w-6" />}
+                  accent="border-blue-100"
+                />
+                <StatCard
+                  label="Pending Jobs"
+                  value={pendingCount}
+                  icon={<Clock className="h-6 w-6" />}
+                  accent="border-amber-100"
+                />
+                <StatCard
+                  label="Completed Jobs"
+                  value={completedCount}
+                  icon={<CheckCircle2 className="h-6 w-6" />}
+                  accent="border-emerald-100"
+                />
+              </div>
+
+              {/* ── Filter / sort bar ── */}
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-medium text-gray-700">
+                  {sortedBookings.length}{" "}
+                  {sortedBookings.length === 1 ? "booking" : "bookings"}
+                </p>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setSortNewest(!sortNewest)}
-                    className="border-border text-muted-foreground hover:border-electric hover:text-electric"
+                    className="border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 text-xs"
                     data-ocid="admin.toggle"
                   >
-                    <ArrowUpDown className="mr-1.5 h-3.5 w-3.5" />
+                    <ArrowDownUp className="mr-1.5 h-3.5 w-3.5" />
                     {sortNewest ? "Newest First" : "Oldest First"}
                   </Button>
                   <Button
@@ -381,7 +893,7 @@ export default function AdminPage() {
                     size="sm"
                     onClick={() => refetch()}
                     disabled={isFetching}
-                    className="border-border text-muted-foreground hover:border-electric hover:text-electric"
+                    className="border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600 text-xs"
                     data-ocid="admin.secondary_button"
                   >
                     <RefreshCw
@@ -392,165 +904,109 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* ── Content ── */}
               {bookingsLoading ? (
                 <div
-                  className="flex items-center justify-center py-16"
+                  className="flex flex-col items-center justify-center gap-3 py-24 text-center"
                   data-ocid="admin.loading_state"
                 >
-                  <Loader2 className="h-6 w-6 animate-spin text-electric" />
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <p className="text-sm text-gray-400">Loading bookings…</p>
                 </div>
               ) : sortedBookings.length === 0 ? (
                 <div
-                  className="flex flex-col items-center gap-3 py-16 text-center"
+                  className="flex flex-col items-center gap-4 rounded-2xl border-2 border-dashed border-gray-200 bg-white py-24 text-center"
                   data-ocid="admin.empty_state"
                 >
-                  <Zap className="h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">
-                    No bookings yet. They'll appear here once customers submit
-                    requests.
-                  </p>
+                  <ClipboardList className="h-10 w-10 text-gray-300" />
+                  <div>
+                    <p className="text-base font-semibold text-gray-600">
+                      No bookings yet
+                    </p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Service requests will appear here once customers submit
+                      them.
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <div
-                  className="overflow-x-auto rounded-lg border border-border"
-                  data-ocid="admin.table"
-                >
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          #
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Customer
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Service
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Problem
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Date &amp; Time
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Status
-                        </TableHead>
-                        <TableHead className="font-display text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Actions
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedBookings.map((booking, idx) => (
-                        <TableRow
-                          key={booking.bookingId}
-                          className="border-border transition-colors hover:bg-muted/30"
-                          data-ocid={`admin.row.${idx + 1}`}
-                        >
-                          <TableCell className="w-10 text-sm font-medium text-muted-foreground">
-                            {idx + 1}
-                          </TableCell>
-                          <TableCell className="max-w-[120px]">
-                            <p className="truncate text-xs text-muted-foreground">
-                              {booking.userEmail}
-                            </p>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs font-medium ${
-                                SERVICE_COLORS[booking.serviceType] ??
-                                "bg-muted/50 text-foreground border-border"
-                              }`}
-                            >
-                              {booking.serviceType}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <p className="line-clamp-2 text-sm text-foreground">
-                              {booking.description}
-                            </p>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                            {formatTimestamp(booking.timestamp)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={`text-xs font-medium capitalize ${
-                                STATUS_STYLES[booking.status] ??
-                                "bg-muted/50 text-foreground border-border"
-                              }`}
-                            >
-                              {booking.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-1.5">
-                              {booking.status === "pending" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 border-blue-500/30 px-2 text-xs text-blue-400 hover:border-blue-500 hover:bg-blue-500/10"
-                                  onClick={() =>
-                                    handleUpdateStatus(
-                                      booking.bookingId,
-                                      "accepted",
-                                    )
-                                  }
-                                  disabled={updateStatus.isPending}
-                                  data-ocid={`admin.edit_button.${idx + 1}`}
-                                >
-                                  Accept
-                                </Button>
-                              )}
-                              {booking.status === "accepted" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 border-green-500/30 px-2 text-xs text-green-400 hover:border-green-500 hover:bg-green-500/10"
-                                  onClick={() =>
-                                    handleUpdateStatus(
-                                      booking.bookingId,
-                                      "completed",
-                                    )
-                                  }
-                                  disabled={updateStatus.isPending}
-                                  data-ocid={`admin.save_button.${idx + 1}`}
-                                >
-                                  <CheckCircle className="mr-1 h-3 w-3" />{" "}
-                                  Complete
-                                </Button>
-                              )}
-                              {booking.status === "completed" && (
-                                <span className="text-xs text-green-400">
-                                  ✓ Done
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
+                <>
+                  {/* Mobile: card grid */}
+                  <div
+                    className="sm:hidden grid grid-cols-1 gap-4"
+                    data-ocid="admin.list"
+                  >
+                    {sortedBookings.map((booking, idx) => (
+                      <BookingCard
+                        key={booking.bookingId}
+                        booking={booking}
+                        index={idx}
+                        onUpdateStatus={handleUpdateStatus}
+                        isPending={updateStatus.isPending}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Desktop: table */}
+                  <div
+                    className="hidden sm:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm"
+                    data-ocid="admin.table"
+                  >
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50 border-b border-gray-200 hover:bg-gray-50">
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600 whitespace-nowrap">
+                            Customer Email
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600 whitespace-nowrap">
+                            Service Type
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600">
+                            Problem
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600 whitespace-nowrap">
+                            Date & Time
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600">
+                            Status
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600 whitespace-nowrap">
+                            Assigned Technician
+                          </TableHead>
+                          <TableHead className="py-3 px-4 text-xs font-semibold text-blue-600">
+                            Actions
+                          </TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedBookings.map((booking, idx) => (
+                          <BookingTableRow
+                            key={booking.bookingId}
+                            booking={booking}
+                            index={idx}
+                            onUpdateStatus={handleUpdateStatus}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
-            </div>
+            </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-border bg-background py-6">
+      {/* ── Footer ── */}
+      <footer className="mt-12 border-t border-gray-200 bg-white py-6">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6">
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-gray-400">
             © {new Date().getFullYear()}. Built with ❤️ using{" "}
             <a
               href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-electric hover:underline"
+              className="text-blue-500 hover:underline"
             >
               caffeine.ai
             </a>

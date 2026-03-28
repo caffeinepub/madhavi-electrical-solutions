@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, RefreshCw, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -19,7 +20,8 @@ export default function LoginPage({
   onGoToSignup,
   loginFn,
 }: LoginPageProps) {
-  const { actor, isFetching, refetchActor } = useActor();
+  const { actor, isFetching } = useActor();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -79,6 +81,12 @@ export default function LoginPage({
     }
   }
 
+  function handleRetry() {
+    queryClient.invalidateQueries({ queryKey: ["actor"] });
+    setConnectionError(false);
+    setError("");
+  }
+
   const isButtonDisabled = loading || isFetching;
 
   return (
@@ -130,7 +138,7 @@ export default function LoginPage({
           )}
 
           {connectionError && !isFetching && (
-            <div className="mb-4 flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
+            <div className="mb-4 flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3">
               <p className="text-sm font-medium text-destructive">
                 Server se connection fail hua. Retry karo.
               </p>
@@ -138,11 +146,7 @@ export default function LoginPage({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  refetchActor();
-                  setConnectionError(false);
-                  setError("");
-                }}
+                onClick={handleRetry}
                 className="flex w-fit items-center gap-1.5 text-xs"
               >
                 <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
@@ -192,7 +196,7 @@ export default function LoginPage({
             </div>
 
             {error && (
-              <div className="rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
+              <div className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3">
                 <p
                   className="text-sm font-medium text-destructive"
                   data-ocid="login.error_state"
