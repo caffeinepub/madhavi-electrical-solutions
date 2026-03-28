@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, Zap } from "lucide-react";
+import { Loader2, RefreshCw, ShieldCheck, Zap } from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { useActor } from "../hooks/useActor";
 import { hashPassword } from "../utils/hashPassword";
 
 export default function AdminLoginPage() {
-  const { actor, isFetching } = useActor();
+  const { actor, isFetching, isError, refetchActor } = useActor();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -25,8 +25,9 @@ export default function AdminLoginPage() {
     }
 
     if (!actor) {
-      setError("Server se connect nahi ho pa raha. Page refresh karo.");
-      toast.error("Connection error. Please refresh the page.");
+      setError(
+        "Server se connect nahi ho pa raha. Niche 'Retry' button dabao.",
+      );
       return;
     }
 
@@ -71,7 +72,6 @@ export default function AdminLoginPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-5 py-10">
-      {/* Background decoration */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-0 h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-primary opacity-[0.06] blur-3xl" />
         <div className="absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 translate-y-1/3 rounded-full bg-primary opacity-[0.04] blur-2xl" />
@@ -83,7 +83,6 @@ export default function AdminLoginPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Branding */}
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-primary opacity-20 blur-xl" />
@@ -104,7 +103,6 @@ export default function AdminLoginPage() {
           </div>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-border bg-card/80 px-6 py-7 shadow-sm backdrop-blur-sm">
           <div className="mb-6 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
@@ -122,6 +120,23 @@ export default function AdminLoginPage() {
             <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
               <Loader2 className="h-4 w-4 animate-spin" />
               Server se connect ho raha hai...
+            </div>
+          )}
+
+          {isError && !isFetching && (
+            <div className="mb-4 flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
+              <p className="text-sm font-medium text-destructive">
+                Server se connection fail hua.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => refetchActor()}
+                className="flex w-fit items-center gap-1.5 text-xs"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
+              </Button>
             </div>
           )}
 
@@ -167,12 +182,28 @@ export default function AdminLoginPage() {
             </div>
 
             {error && (
-              <p
-                className="rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
-                data-ocid="admin_login.error_state"
-              >
-                {error}
-              </p>
+              <div className="flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/10 px-4 py-3">
+                <p
+                  className="text-sm font-medium text-destructive"
+                  data-ocid="admin_login.error_state"
+                >
+                  {error}
+                </p>
+                {!actor && !isFetching && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      refetchActor();
+                      setError("");
+                    }}
+                    className="flex w-fit items-center gap-1.5 text-xs"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
+                  </Button>
+                )}
+              </div>
             )}
 
             <Button
