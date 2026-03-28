@@ -32,9 +32,10 @@ export function useActor() {
     staleTime: Number.POSITIVE_INFINITY,
     enabled: true,
     retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
   });
 
+  // When the actor changes, invalidate dependent queries
   useEffect(() => {
     if (actorQuery.data) {
       queryClient.invalidateQueries({
@@ -50,10 +51,15 @@ export function useActor() {
     }
   }, [actorQuery.data, queryClient]);
 
+  const refetchActor = () => {
+    queryClient.invalidateQueries({ queryKey: [ACTOR_QUERY_KEY] });
+    actorQuery.refetch();
+  };
+
   return {
     actor: actorQuery.data || null,
     isFetching: actorQuery.isFetching,
     isError: actorQuery.isError,
-    refetchActor: actorQuery.refetch,
+    refetchActor,
   };
 }
