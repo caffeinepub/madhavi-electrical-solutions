@@ -15,15 +15,17 @@ interface TechnicianLoginPageProps {
 export default function TechnicianLoginPage({
   onLoginSuccess,
 }: TechnicianLoginPageProps) {
-  const { actor, isFetching, isError, refetchActor } = useActor();
+  const { actor, isFetching, refetchActor } = useActor();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setConnectionError(false);
 
     if (isFetching) {
       setError("Server se connect ho raha hai, thoda ruko...");
@@ -31,9 +33,7 @@ export default function TechnicianLoginPage({
     }
 
     if (!actor) {
-      setError(
-        "Server se connect nahi ho pa raha. Niche 'Retry' button dabao.",
-      );
+      setConnectionError(true);
       return;
     }
 
@@ -125,7 +125,7 @@ export default function TechnicianLoginPage({
             </div>
           )}
 
-          {isError && !isFetching && (
+          {connectionError && !isFetching && (
             <div className="mb-4 flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
               <p className="text-sm font-medium text-destructive">
                 Server se connection fail hua.
@@ -134,7 +134,11 @@ export default function TechnicianLoginPage({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => refetchActor()}
+                onClick={() => {
+                  refetchActor();
+                  setConnectionError(false);
+                  setError("");
+                }}
                 className="flex w-fit items-center gap-1.5 text-xs"
               >
                 <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
@@ -184,27 +188,13 @@ export default function TechnicianLoginPage({
             </div>
 
             {error && (
-              <div className="flex flex-col gap-2 rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
+              <div className="rounded-lg border border-destructive/25 bg-destructive/8 px-4 py-3">
                 <p
                   className="text-sm font-medium text-destructive"
                   data-ocid="tech_login.error_state"
                 >
                   {error}
                 </p>
-                {!actor && !isFetching && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      refetchActor();
-                      setError("");
-                    }}
-                    className="flex w-fit items-center gap-1.5 text-xs"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" /> Retry Connection
-                  </Button>
-                )}
               </div>
             )}
 
